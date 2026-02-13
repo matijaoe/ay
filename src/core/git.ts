@@ -155,3 +155,52 @@ export async function getMainWorktreePath(cwd?: string): Promise<string> {
 	if (!main) throw new Error("Could not find main worktree");
 	return main.path;
 }
+
+export async function isBranchMerged(
+	branch: string,
+	targetBranch: string,
+	cwd?: string,
+): Promise<boolean> {
+	const g = git(cwd);
+	try {
+		const merged = await g.raw(["branch", "--merged", targetBranch]);
+		const branches = merged
+			.split("\n")
+			.map((b) => b.replace(/^\*?\s+/, "").trim())
+			.filter(Boolean);
+		return branches.includes(branch);
+	} catch {
+		return false;
+	}
+}
+
+export async function getLastCommitDate(worktreePath: string): Promise<Date | null> {
+	const g = git(worktreePath);
+	try {
+		const result = await g.raw(["log", "-1", "--format=%aI"]);
+		const trimmed = result.trim();
+		return trimmed ? new Date(trimmed) : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function getAheadBehind(
+	branch: string,
+	remoteBranch: string,
+	cwd?: string,
+): Promise<{ ahead: number; behind: number }> {
+	const g = git(cwd);
+	try {
+		const result = await g.raw([
+			"rev-list",
+			"--left-right",
+			"--count",
+			`${branch}...${remoteBranch}`,
+		]);
+		const [ahead, behind] = result.trim().split(/\s+/).map(Number);
+		return { ahead: ahead ?? 0, behind: behind ?? 0 };
+	} catch {
+		return { ahead: 0, behind: 0 };
+	}
+}
