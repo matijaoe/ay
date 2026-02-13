@@ -5,6 +5,11 @@ export interface ToolPreset extends AyToolConfig {
 	label: string;
 	/** Aliases the user can type (e.g. "cursor" or "cc") */
 	aliases: string[];
+	/**
+	 * If true, the tool doesn't accept a path argument —
+	 * it should be launched with cwd set to the worktree instead.
+	 */
+	cwdOnly?: boolean;
 }
 
 /**
@@ -31,12 +36,14 @@ export const TOOL_PRESETS: Record<string, ToolPreset> = {
 		command: "claude",
 		aliases: ["claude-code", "cc"],
 		passArgs: false,
+		cwdOnly: true,
 	},
 	codex: {
 		label: "Codex CLI",
 		command: "codex",
 		aliases: [],
 		passArgs: false,
+		cwdOnly: true,
 	},
 	windsurf: {
 		label: "Windsurf",

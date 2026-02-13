@@ -1,6 +1,6 @@
-import { execa } from "execa";
+import { execa, execaSync } from "execa";
 
-const TUI_EDITORS = new Set([
+const TUI_PROGRAMS = new Set([
 	"nano",
 	"vim",
 	"vi",
@@ -14,25 +14,47 @@ const TUI_EDITORS = new Set([
 	"pico",
 	"ne",
 	"kak",
+	"claude",
+	"codex",
 ]);
 
+function baseName(bin: string): string {
+	return bin.split("/").pop() ?? bin;
+}
+
 function isTuiProgram(bin: string): boolean {
-	// Extract the base name (e.g. "/usr/bin/nano" → "nano")
-	const base = bin.split("/").pop() ?? bin;
-	return TUI_EDITORS.has(base);
+	return TUI_PROGRAMS.has(baseName(bin));
 }
 
 /**
- * Launch a tool, handling TUI vs GUI editors correctly.
+ * Check if a binary exists in $PATH.
+ */
+export function whichSync(bin: string): boolean {
+	try {
+		execaSync("which", [bin], { stdio: "ignore" });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Launch a tool, handling TUI vs GUI programs correctly.
  *
- * TUI editors (nano, vim, etc.) → stdio: "inherit", await completion
- * GUI editors (code, cursor, etc.) → detached, fire-and-forget
+ * TUI programs (nano, vim, claude, codex, etc.) → stdio: "inherit", await completion
+ * GUI programs (code, cursor, etc.) → detached, fire-and-forget
+ *
+ * Throws a user-friendly error if the binary is not found.
  */
 export async function launchTool(
 	bin: string,
 	args: string[],
 	opts: { cwd?: string } = {},
 ): Promise<void> {
+	if (!whichSync(bin)) {
+		throw new Error(`"${bin}" not found in $PATH. Is it installed?`);
+	}
+
 	if (isTuiProgram(bin)) {
 		await execa(bin, args, {
 			cwd: opts.cwd,
@@ -44,7 +66,6 @@ export async function launchTool(
 			detached: true,
 			stdio: "ignore",
 		});
-		// Let the GUI process outlive us
 		subprocess.unref();
 	}
 }

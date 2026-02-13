@@ -160,6 +160,9 @@
           "passArgs": {
             "default": false,
             "type": "boolean"
+          },
+          "cwdOnly": {
+            "type": "boolean"
           }
         },
         "required": [

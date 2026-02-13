@@ -111,10 +111,17 @@ export async function interactiveMode(): Promise<void> {
 
 			const toolConfig = allTools[toolKey];
 			const cmdParts = toolConfig.command.split(" ");
-			await launchTool(cmdParts[0], [...cmdParts.slice(1), choice.wt.path], {
-				cwd: choice.wt.path,
-			});
-			consola.success(`Opened with ${toolKey}`);
+			const launchArgs =
+				"cwdOnly" in toolConfig && toolConfig.cwdOnly
+					? cmdParts.slice(1)
+					: [...cmdParts.slice(1), choice.wt.path];
+			try {
+				await launchTool(cmdParts[0], launchArgs, { cwd: choice.wt.path });
+				consola.success(`Opened with ${toolKey}`);
+			} catch (error: unknown) {
+				const msg = error instanceof Error ? error.message : String(error);
+				consola.error(msg);
+			}
 			break;
 		}
 		case "Run setup": {

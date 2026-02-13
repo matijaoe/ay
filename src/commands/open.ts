@@ -3,7 +3,7 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { loadConfig } from "../config/loader";
 import { isGitRepo, listWorktrees } from "../core/git";
-import { launchTool } from "../core/launch";
+import { launchTool, whichSync } from "../core/launch";
 import { getAllTools, resolveTool } from "../core/tools";
 
 export default defineCommand({
@@ -49,9 +49,12 @@ export default defineCommand({
 			consola.log("");
 			for (const [key, tool] of entries) {
 				const label = "label" in tool && tool.label ? ` (${tool.label})` : "";
+				const bin = tool.command.split(" ")[0];
+				const installed = whichSync(bin);
+				const status = installed ? "\x1b[32m✓\x1b[0m" : "\x1b[2m✗\x1b[0m";
 				const isUser = key in config.tools;
 				const tag = isUser ? " \x1b[36m[config]\x1b[0m" : "";
-				consola.log(`    ${key}${label}  →  ${tool.command}${tag}`);
+				consola.log(`    ${status} ${key}${label}  →  ${tool.command}${tag}`);
 			}
 			consola.log("");
 			return;
@@ -102,12 +105,8 @@ export default defineCommand({
 		const userToolNames = Object.keys(config.tools);
 
 		if (userToolNames.length === 0) {
-			// No user-configured tools — use $EDITOR or default to "code"
 			const editor = process.env.EDITOR || "code";
-			consola.start(`Opening with ${editor}...`);
-			await launchTool(editor, [targetPath], { cwd: targetPath });
-			consola.success(`Opened with ${editor}`);
-			return;
+			return launchResolved(editor, { command: editor }, targetPath);
 		}
 
 		if (userToolNames.length === 1) {
@@ -130,21 +129,31 @@ export default defineCommand({
 
 async function launchResolved(
 	key: string,
-	toolConfig: { command: string; passArgs?: boolean },
+	toolConfig: { command: string; passArgs?: boolean; cwdOnly?: boolean },
 	targetPath: string,
 ): Promise<void> {
 	const cmdParts = toolConfig.command.split(" ");
 	const bin = cmdParts[0];
 	const cmdArgs = [...cmdParts.slice(1)];
 
-	const dotIndex = cmdArgs.indexOf(".");
-	if (dotIndex !== -1) {
-		cmdArgs[dotIndex] = targetPath;
-	} else {
-		cmdArgs.push(targetPath);
+	// cwdOnly tools (claude, codex) don't take a path arg — they use cwd
+	if (!toolConfig.cwdOnly) {
+		const dotIndex = cmdArgs.indexOf(".");
+		if (dotIndex !== -1) {
+			cmdArgs[dotIndex] = targetPath;
+		} else {
+			cmdArgs.push(targetPath);
+		}
 	}
 
-	consola.start(`Opening with ${key}: ${bin} ${cmdArgs.join(" ")}`);
-	await launchTool(bin, cmdArgs, { cwd: targetPath });
-	consola.success(`Launched ${key}`);
+	consola.start(`Opening with ${key}: ${bin}${cmdArgs.length ? ` ${cmdArgs.join(" ")}` : ""}`);
+	try {
+		await launchTool(bin, cmdArgs, { cwd: targetPath });
+		consola.success(`Launched ${key}`);
+	} catch (error: unknown) {
+		const msg = error instanceof Error ? error.message : String(error);
+		consola.error(msg);
+		consola.info("Run `ay open --list` to see installed tools");
+		process.exit(1);
+	}
 }

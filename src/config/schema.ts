@@ -32,6 +32,7 @@ export const toolConfigSchema = z.object({
 	command: z.string(),
 	shortFlag: z.string().optional(),
 	passArgs: z.boolean().default(false),
+	cwdOnly: z.boolean().optional(),
 });
 
 export const providerSchema = z.object({

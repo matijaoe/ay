@@ -118,7 +118,13 @@ export default defineCommand({
 					process.exit(1);
 				}
 				const editor = process.env.EDITOR || "vi";
-				await launchTool(editor, [configFile]);
+				try {
+					await launchTool(editor, [configFile]);
+				} catch (error: unknown) {
+					const msg = error instanceof Error ? error.message : String(error);
+					consola.error(msg);
+					process.exit(1);
+				}
 				break;
 			}
 
