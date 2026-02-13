@@ -2,6 +2,7 @@ import path from "node:path";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { deleteBranch, getStatus, isGitRepo, listWorktrees, removeWorktree } from "../core/git";
+import { fuzzyMatch } from "../utils/names";
 import { contractHome } from "../utils/paths";
 
 export default defineCommand({
@@ -42,12 +43,17 @@ export default defineCommand({
 		let target: (typeof worktrees)[number] | undefined;
 
 		if (args.name) {
-			target = nonMain.find((w) => path.basename(w.path) === args.name);
-			if (!target) {
+			const names = nonMain.map((w) => path.basename(w.path));
+			const matched = fuzzyMatch(args.name, names);
+			if (!matched) {
 				consola.error(`Worktree "${args.name}" not found`);
-				consola.info("Available:", nonMain.map((w) => path.basename(w.path)).join(", "));
+				consola.info("Available:", names.join(", "));
 				process.exit(1);
 			}
+			if (matched !== args.name) {
+				consola.info(`Matched "${args.name}" → ${matched}`);
+			}
+			target = nonMain.find((w) => path.basename(w.path) === matched)!;
 		} else {
 			const choices = nonMain.map((w) => path.basename(w.path));
 			const selected = await consola.prompt("Select worktree to delete", {

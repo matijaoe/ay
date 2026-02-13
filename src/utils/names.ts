@@ -79,6 +79,37 @@ export function generateName(style: NameStyle): string {
 	return uniqueNamesGenerator(getConfig(style));
 }
 
+/**
+ * Simple fuzzy match — substring, prefix, or contains-in-order.
+ * Returns the best match or undefined.
+ */
+export function fuzzyMatch(query: string, candidates: string[]): string | undefined {
+	const q = query.toLowerCase();
+
+	// Exact
+	const exact = candidates.find((c) => c.toLowerCase() === q);
+	if (exact) return exact;
+
+	// Prefix
+	const prefix = candidates.find((c) => c.toLowerCase().startsWith(q));
+	if (prefix) return prefix;
+
+	// Substring
+	const substr = candidates.find((c) => c.toLowerCase().includes(q));
+	if (substr) return substr;
+
+	// Characters in order (fuzzy)
+	const fuzzy = candidates.find((c) => {
+		const lower = c.toLowerCase();
+		let qi = 0;
+		for (let ci = 0; ci < lower.length && qi < q.length; ci++) {
+			if (lower[ci] === q[qi]) qi++;
+		}
+		return qi === q.length;
+	});
+	return fuzzy;
+}
+
 export function generateUniqueName(
 	style: NameStyle,
 	existing: Set<string>,

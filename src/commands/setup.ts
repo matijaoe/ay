@@ -4,6 +4,7 @@ import { consola } from "consola";
 import { loadConfig } from "../config/loader";
 import { getMainWorktreePath, getRepoName, isGitRepo, listWorktrees } from "../core/git";
 import { runScripts, type ScriptContext } from "../core/scripts";
+import { fuzzyMatch } from "../utils/names";
 
 export default defineCommand({
 	meta: {
@@ -40,11 +41,16 @@ export default defineCommand({
 		let target: (typeof worktrees)[number] | undefined;
 
 		if (args.name) {
-			target = worktrees.find((w) => path.basename(w.path) === args.name);
-			if (!target) {
+			const names = worktrees.map((w) => path.basename(w.path));
+			const matched = fuzzyMatch(args.name, names);
+			if (!matched) {
 				consola.error(`Worktree "${args.name}" not found`);
 				process.exit(1);
 			}
+			if (matched !== args.name) {
+				consola.info(`Matched "${args.name}" → ${matched}`);
+			}
+			target = worktrees.find((w) => path.basename(w.path) === matched)!;
 		} else {
 			const choices = worktrees.map((w) => path.basename(w.path));
 			const selected = await consola.prompt("Select worktree", {
