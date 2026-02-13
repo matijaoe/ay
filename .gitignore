@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.tgz
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+*.log

@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "worktreePath": {
+      "default": "~/worktrees/{repo}/{name}",
+      "type": "string"
+    },
+    "defaults": {
+      "default": {
+        "baseBranch": "main",
+        "autoName": true,
+        "nameStyle": "adjective-animal",
+        "branchPrefix": "",
+        "nodeModules": "install"
+      },
+      "type": "object",
+      "properties": {
+        "baseBranch": {
+          "default": "main",
+          "type": "string"
+        },
+        "autoName": {
+          "default": true,
+          "type": "boolean"
+        },
+        "nameStyle": {
+          "default": "adjective-animal",
+          "type": "string",
+          "enum": [
+            "adjective-animal",
+            "city",
+            "color-noun"
+          ]
+        },
+        "branchPrefix": {
+          "default": "",
+          "type": "string"
+        },
+        "nodeModules": {
+          "default": "install",
+          "type": "string",
+          "enum": [
+            "copy",
+            "symlink",
+            "install",
+            "skip"
+          ]
+        }
+      },
+      "required": [
+        "baseBranch",
+        "autoName",
+        "nameStyle",
+        "branchPrefix",
+        "nodeModules"
+      ],
+      "additionalProperties": false
+    },
+    "environment": {
+      "default": {
+        "copy": [
+          ".env*"
+        ],
+        "symlink": [],
+        "ignore": [
+          "node_modules/.cache"
+        ]
+      },
+      "type": "object",
+      "properties": {
+        "copy": {
+          "default": [
+            ".env*"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "symlink": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ignore": {
+          "default": [
+            "node_modules/.cache"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "copy",
+        "symlink",
+        "ignore"
+      ],
+      "additionalProperties": false
+    },
+    "scripts": {
+      "default": {
+        "setup": "",
+        "install": "",
+        "dev": ""
+      },
+      "type": "object",
+      "properties": {
+        "setup": {
+          "default": "",
+          "type": "string"
+        },
+        "install": {
+          "default": "",
+          "type": "string"
+        },
+        "dev": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "setup",
+        "install",
+        "dev"
+      ],
+      "additionalProperties": false
+    },
+    "runOnNew": {
+      "default": [
+        "setup"
+      ],
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tools": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "shortFlag": {
+            "type": "string"
+          },
+          "passArgs": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "command",
+          "passArgs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "provider": {
+      "default": {
+        "type": "github",
+        "remote": "origin"
+      },
+      "type": "object",
+      "properties": {
+        "type": {
+          "default": "github",
+          "type": "string",
+          "enum": [
+            "github",
+            "gitlab"
+          ]
+        },
+        "remote": {
+          "default": "origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "remote"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "worktreePath",
+    "defaults",
+    "environment",
+    "scripts",
+    "runOnNew",
+    "tools",
+    "provider"
+  ],
+  "additionalProperties": false
+}
