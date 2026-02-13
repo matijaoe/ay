@@ -4,6 +4,7 @@ import { consola } from "consola";
 import { loadConfig } from "../config/loader";
 import { isGitRepo, listWorktrees } from "../core/git";
 import { launchTool } from "../core/launch";
+import { getAllTools, resolveTool } from "../core/tools";
 
 export default defineCommand({
 	meta: {
@@ -19,7 +20,12 @@ export default defineCommand({
 		tool: {
 			type: "string",
 			alias: "t",
-			description: "Tool name from config (e.g. cursor, code)",
+			description: "Tool name (e.g. cursor, claude, code, zed)",
+		},
+		list: {
+			type: "boolean",
+			alias: "l",
+			description: "List all available tools",
 		},
 	},
 	async run({ args }) {
@@ -29,6 +35,28 @@ export default defineCommand({
 		}
 
 		const { config } = await loadConfig();
+
+		// --- List tools mode ---
+		if (args.list) {
+			const all = getAllTools(config.tools);
+			const entries = Object.entries(all);
+			if (entries.length === 0) {
+				consola.info("No tools configured");
+				return;
+			}
+			consola.log("");
+			consola.log("  Available tools:");
+			consola.log("");
+			for (const [key, tool] of entries) {
+				const label = "label" in tool && tool.label ? ` (${tool.label})` : "";
+				const isUser = key in config.tools;
+				const tag = isUser ? " \x1b[36m[config]\x1b[0m" : "";
+				consola.log(`    ${key}${label}  →  ${tool.command}${tag}`);
+			}
+			consola.log("");
+			return;
+		}
+
 		const worktrees = await listWorktrees();
 
 		if (worktrees.length === 0) {
@@ -60,60 +88,63 @@ export default defineCommand({
 		}
 
 		// --- Resolve tool ---
-		const toolNames = Object.keys(config.tools);
-		let toolKey: string | undefined;
-
 		if (args.tool) {
-			toolKey = args.tool;
-		} else if (toolNames.length === 0) {
+			const resolved = resolveTool(args.tool, config.tools);
+			if (!resolved) {
+				consola.error(`Unknown tool "${args.tool}"`);
+				consola.info("Run `ay open --list` to see available tools");
+				process.exit(1);
+			}
+			return launchResolved(resolved.key, resolved.config, targetPath);
+		}
+
+		// No --tool flag: check user config, then prompt/fallback
+		const userToolNames = Object.keys(config.tools);
+
+		if (userToolNames.length === 0) {
+			// No user-configured tools — use $EDITOR or default to "code"
 			const editor = process.env.EDITOR || "code";
 			consola.start(`Opening with ${editor}...`);
 			await launchTool(editor, [targetPath], { cwd: targetPath });
 			consola.success(`Opened with ${editor}`);
 			return;
-		} else if (toolNames.length === 1) {
-			toolKey = toolNames[0];
-		} else {
-			const selected = await consola.prompt("Select tool", {
-				type: "select",
-				options: toolNames,
-			});
-			if (typeof selected !== "string") {
-				consola.warn("Cancelled");
-				return;
-			}
-			toolKey = selected;
 		}
 
-		const toolConfig = config.tools[toolKey];
-		if (!toolConfig) {
-			consola.error(`Tool "${toolKey}" not found in config`);
-			consola.info("Available tools:", toolNames.join(", ") || "(none)");
-			process.exit(1);
+		if (userToolNames.length === 1) {
+			const key = userToolNames[0];
+			return launchResolved(key, config.tools[key], targetPath);
 		}
 
-		// --- Launch tool ---
-		const cmdParts = toolConfig.command.split(" ");
-		const bin = cmdParts[0];
-		const cmdArgs = [...cmdParts.slice(1)];
-
-		// If command contains "." as a placeholder, replace with worktree path
-		// Otherwise append worktree path
-		const dotIndex = cmdArgs.indexOf(".");
-		if (dotIndex !== -1) {
-			cmdArgs[dotIndex] = targetPath;
-		} else {
-			cmdArgs.push(targetPath);
+		// Multiple user tools — prompt
+		const selected = await consola.prompt("Select tool", {
+			type: "select",
+			options: userToolNames,
+		});
+		if (typeof selected !== "string") {
+			consola.warn("Cancelled");
+			return;
 		}
-
-		// Forward extra args if passArgs is true
-		if (toolConfig.passArgs) {
-			const extraArgs = args._.slice(0);
-			cmdArgs.push(...extraArgs);
-		}
-
-		consola.start(`Opening with ${toolKey}: ${bin} ${cmdArgs.join(" ")}`);
-		await launchTool(bin, cmdArgs, { cwd: targetPath });
-		consola.success(`Launched ${toolKey}`);
+		return launchResolved(selected, config.tools[selected], targetPath);
 	},
 });
+
+async function launchResolved(
+	key: string,
+	toolConfig: { command: string; passArgs?: boolean },
+	targetPath: string,
+): Promise<void> {
+	const cmdParts = toolConfig.command.split(" ");
+	const bin = cmdParts[0];
+	const cmdArgs = [...cmdParts.slice(1)];
+
+	const dotIndex = cmdArgs.indexOf(".");
+	if (dotIndex !== -1) {
+		cmdArgs[dotIndex] = targetPath;
+	} else {
+		cmdArgs.push(targetPath);
+	}
+
+	consola.start(`Opening with ${key}: ${bin} ${cmdArgs.join(" ")}`);
+	await launchTool(bin, cmdArgs, { cwd: targetPath });
+	consola.success(`Launched ${key}`);
+}

@@ -13,6 +13,7 @@ import {
 } from "../core/git";
 import { launchTool } from "../core/launch";
 import { runScripts } from "../core/scripts";
+import { getAllTools } from "../core/tools";
 import { relativeTime } from "../utils/format";
 import { contractHome } from "../utils/paths";
 
@@ -93,28 +94,27 @@ export async function interactiveMode(): Promise<void> {
 
 	switch (action) {
 		case "Open in editor": {
-			const toolNames = Object.keys(config.tools);
-			if (toolNames.length === 0) {
-				const editor = process.env.EDITOR || "code";
-				await launchTool(editor, [choice.wt.path], { cwd: choice.wt.path });
-				consola.success(`Opened with ${editor}`);
+			const allTools = getAllTools(config.tools);
+			const toolNames = Object.keys(allTools);
+			let toolKey: string;
+
+			if (toolNames.length === 1) {
+				toolKey = toolNames[0];
 			} else {
-				let toolKey = toolNames[0];
-				if (toolNames.length > 1) {
-					const sel = await consola.prompt("Tool", {
-						type: "select",
-						options: toolNames,
-					});
-					if (typeof sel !== "string") return;
-					toolKey = sel;
-				}
-				const toolConfig = config.tools[toolKey];
-				const cmdParts = toolConfig.command.split(" ");
-				await launchTool(cmdParts[0], [...cmdParts.slice(1), choice.wt.path], {
-					cwd: choice.wt.path,
+				const sel = await consola.prompt("Tool", {
+					type: "select",
+					options: toolNames,
 				});
-				consola.success(`Opened with ${toolKey}`);
+				if (typeof sel !== "string") return;
+				toolKey = sel;
 			}
+
+			const toolConfig = allTools[toolKey];
+			const cmdParts = toolConfig.command.split(" ");
+			await launchTool(cmdParts[0], [...cmdParts.slice(1), choice.wt.path], {
+				cwd: choice.wt.path,
+			});
+			consola.success(`Opened with ${toolKey}`);
 			break;
 		}
 		case "Run setup": {
