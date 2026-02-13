@@ -1,5 +1,9 @@
+import path from "node:path";
 import { defineCommand } from "citty";
 import { consola } from "consola";
+import { loadConfig } from "../config/loader";
+import { getMainWorktreePath, getRepoName, isGitRepo, listWorktrees } from "../core/git";
+import { runScripts, type ScriptContext } from "../core/scripts";
 
 export default defineCommand({
 	meta: {
@@ -21,7 +25,63 @@ export default defineCommand({
 			description: "Run all scripts",
 		},
 	},
-	run({ args }) {
-		consola.info("ay setup — not implemented yet", args);
+	async run({ args }) {
+		if (!(await isGitRepo())) {
+			consola.error("Not a git repository");
+			process.exit(1);
+		}
+
+		const { config } = await loadConfig();
+		const worktrees = await listWorktrees();
+		const repoName = await getRepoName();
+		const mainWorktree = await getMainWorktreePath();
+
+		// --- Resolve target worktree ---
+		let target: (typeof worktrees)[number] | undefined;
+
+		if (args.name) {
+			target = worktrees.find((w) => path.basename(w.path) === args.name);
+			if (!target) {
+				consola.error(`Worktree "${args.name}" not found`);
+				process.exit(1);
+			}
+		} else {
+			const choices = worktrees.map((w) => path.basename(w.path));
+			const selected = await consola.prompt("Select worktree", {
+				type: "select",
+				options: choices,
+			});
+			if (typeof selected !== "string") {
+				consola.warn("Cancelled");
+				return;
+			}
+			target = worktrees.find((w) => path.basename(w.path) === selected)!;
+		}
+
+		// --- Resolve scripts ---
+		let scriptsToRun: string[];
+		if (args.all) {
+			scriptsToRun = Object.keys(config.scripts);
+		} else if (args.install) {
+			scriptsToRun = ["install"];
+		} else {
+			scriptsToRun = [...config.runOnNew];
+		}
+
+		// --- Run scripts ---
+		const ctx: ScriptContext = {
+			worktreePath: target.path,
+			mainWorktreePath: mainWorktree,
+			branch: target.branch,
+			repoName,
+		};
+
+		const ok = await runScripts(scriptsToRun, config, ctx);
+		if (!ok) {
+			consola.error("Some scripts failed");
+			process.exit(1);
+		}
+
+		consola.success("Setup complete");
 	},
 });

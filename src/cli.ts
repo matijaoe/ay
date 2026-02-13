@@ -1,5 +1,4 @@
 import { defineCommand, runMain } from "citty";
-import { consola } from "consola";
 import { version } from "../package.json";
 
 const main = defineCommand({
@@ -19,10 +18,24 @@ const main = defineCommand({
 		clean: () => import("./commands/clean").then((m) => m.default),
 		status: () => import("./commands/status").then((m) => m.default),
 	},
-	run() {
-		// No subcommand → interactive mode (stub)
-		consola.info("ay — interactive mode not implemented yet");
-		consola.info("Run `ay --help` for available commands");
+	async run({ rawArgs }) {
+		// citty always runs parent `run` — skip if a subcommand was matched
+		const subCommandNames = [
+			"new",
+			"list",
+			"delete",
+			"open",
+			"init",
+			"config",
+			"setup",
+			"clean",
+			"status",
+		];
+		const firstArg = rawArgs.find((a) => !a.startsWith("-"));
+		if (firstArg && subCommandNames.includes(firstArg)) return;
+
+		const { interactiveMode } = await import("./interactive/picker");
+		await interactiveMode();
 	},
 });
 
