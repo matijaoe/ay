@@ -1,9 +1,9 @@
 import path from "node:path";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { execa } from "execa";
 import { loadConfig } from "../config/loader";
 import { isGitRepo, listWorktrees } from "../core/git";
+import { launchTool } from "../core/launch";
 
 export default defineCommand({
 	meta: {
@@ -66,11 +66,9 @@ export default defineCommand({
 		if (args.tool) {
 			toolKey = args.tool;
 		} else if (toolNames.length === 0) {
-			// No tools configured — try common editors
-			consola.warn("No tools configured in .ay/config.jsonc");
-			consola.info("Falling back to $EDITOR or 'code'");
 			const editor = process.env.EDITOR || "code";
-			await execa(editor, [targetPath], { detached: true, stdio: "ignore" }).unref?.();
+			consola.start(`Opening with ${editor}...`);
+			await launchTool(editor, [targetPath], { cwd: targetPath });
 			consola.success(`Opened with ${editor}`);
 			return;
 		} else if (toolNames.length === 1) {
@@ -115,14 +113,7 @@ export default defineCommand({
 		}
 
 		consola.start(`Opening with ${toolKey}: ${bin} ${cmdArgs.join(" ")}`);
-
-		const subprocess = execa(bin, cmdArgs, {
-			cwd: targetPath,
-			detached: true,
-			stdio: "ignore",
-		});
-		subprocess.unref?.();
-
+		await launchTool(bin, cmdArgs, { cwd: targetPath });
 		consola.success(`Launched ${toolKey}`);
 	},
 });

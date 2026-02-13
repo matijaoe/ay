@@ -4,12 +4,15 @@ import { consola } from "consola";
 import { loadConfig } from "../config/loader";
 import {
 	deleteBranch,
+	getMainWorktreePath,
 	getRepoName,
 	getStatus,
 	isGitRepo,
 	listWorktrees,
 	removeWorktree,
 } from "../core/git";
+import { launchTool } from "../core/launch";
+import { runScripts } from "../core/scripts";
 import { relativeTime } from "../utils/format";
 import { contractHome } from "../utils/paths";
 
@@ -93,12 +96,7 @@ export async function interactiveMode(): Promise<void> {
 			const toolNames = Object.keys(config.tools);
 			if (toolNames.length === 0) {
 				const editor = process.env.EDITOR || "code";
-				const { execa } = await import("execa");
-				const subprocess = execa(editor, [choice.wt.path], {
-					detached: true,
-					stdio: "ignore",
-				});
-				subprocess.unref?.();
+				await launchTool(editor, [choice.wt.path], { cwd: choice.wt.path });
 				consola.success(`Opened with ${editor}`);
 			} else {
 				let toolKey = toolNames[0];
@@ -112,27 +110,20 @@ export async function interactiveMode(): Promise<void> {
 				}
 				const toolConfig = config.tools[toolKey];
 				const cmdParts = toolConfig.command.split(" ");
-				const { execa } = await import("execa");
-				const subprocess = execa(cmdParts[0], [...cmdParts.slice(1), choice.wt.path], {
+				await launchTool(cmdParts[0], [...cmdParts.slice(1), choice.wt.path], {
 					cwd: choice.wt.path,
-					detached: true,
-					stdio: "ignore",
 				});
-				subprocess.unref?.();
 				consola.success(`Opened with ${toolKey}`);
 			}
 			break;
 		}
 		case "Run setup": {
-			const { runScripts } = await import("../core/scripts");
-			const { getMainWorktreePath, getRepoName: getRName } = await import("../core/git");
 			const mainWt = await getMainWorktreePath();
-			const repo = await getRName();
 			const ok = await runScripts(config.runOnNew, config, {
 				worktreePath: choice.wt.path,
 				mainWorktreePath: mainWt,
 				branch: choice.wt.branch,
-				repoName: repo,
+				repoName,
 			});
 			if (!ok) consola.error("Some scripts failed");
 			break;

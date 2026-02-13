@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { execa } from "execa";
 import { loadConfig } from "../config/loader";
+import { launchTool } from "../core/launch";
 
 function getNestedValue(obj: Record<string, unknown>, keyPath: string): unknown {
 	const keys = keyPath.split(".");
@@ -118,7 +118,7 @@ export default defineCommand({
 					process.exit(1);
 				}
 				const editor = process.env.EDITOR || "vi";
-				await execa(editor, [configFile], { stdio: "inherit" });
+				await launchTool(editor, [configFile]);
 				break;
 			}
 

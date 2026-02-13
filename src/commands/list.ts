@@ -44,39 +44,42 @@ export default defineCommand({
 
 		// --- Gather status info ---
 		const cwd = process.cwd();
-		const rows = await Promise.all(
-			worktrees.map(async (wt) => {
-				const name = path.basename(wt.path);
-				const isCurrent = cwd.startsWith(wt.path);
-				let status = { total: 0, isClean: true };
-				try {
-					status = await getStatus(wt.path);
-				} catch {
-					// worktree may not exist on disk
-				}
+		const [rows, repoName] = await Promise.all([
+			Promise.all(
+				worktrees.map(async (wt) => {
+					const name = path.basename(wt.path);
+					const isCurrent = cwd.startsWith(wt.path);
+					let status = { total: 0, isClean: true };
+					try {
+						status = await getStatus(wt.path);
+					} catch {
+						// worktree may not exist on disk
+					}
 
-				let age = "";
-				try {
-					const stat = await fs.promises.stat(wt.path);
-					age = relativeTime(stat.birthtime.getTime() > 0 ? stat.birthtime : stat.mtime);
-				} catch {
-					age = "???";
-				}
+					let age = "";
+					try {
+						const stat = await fs.promises.stat(wt.path);
+						age = relativeTime(stat.birthtime.getTime() > 0 ? stat.birthtime : stat.mtime);
+					} catch {
+						age = "???";
+					}
 
-				return {
-					name,
-					branch: wt.branch,
-					status: status.isClean
-						? "clean"
-						: `${status.total} change${status.total !== 1 ? "s" : ""}`,
-					isClean: status.isClean,
-					isCurrent,
-					isMain: wt.isMain,
-					age,
-					path: wt.path,
-				};
-			}),
-		);
+					return {
+						name,
+						branch: wt.branch,
+						status: status.isClean
+							? "clean"
+							: `${status.total} change${status.total !== 1 ? "s" : ""}`,
+						isClean: status.isClean,
+						isCurrent,
+						isMain: wt.isMain,
+						age,
+						path: wt.path,
+					};
+				}),
+			),
+			getRepoName(),
+		]);
 
 		// --- JSON mode ---
 		if (args.json) {
@@ -85,7 +88,6 @@ export default defineCommand({
 		}
 
 		// --- Table mode ---
-		const repoName = await getRepoName();
 		consola.log("");
 		consola.log(
 			`  \x1b[1m${repoName}\x1b[0m — ${rows.length} worktree${rows.length !== 1 ? "s" : ""}`,
