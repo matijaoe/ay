@@ -68,23 +68,30 @@ export default defineCommand({
 			}),
 		);
 
-		// Filter: if --merged flag, only show merged worktrees; otherwise show all merged
-		const toClean = args.merged
-			? candidates.filter((c) => c.merged)
-			: candidates.filter((c) => c.merged);
+		// Without --merged: show all non-main worktrees
+		// With --merged: only those merged into base branch
+		const toClean = args.merged ? candidates.filter((c) => c.merged) : candidates;
 
 		if (toClean.length === 0) {
-			consola.info(`No merged worktrees found (checked against ${baseBranch})`);
+			consola.info(
+				args.merged
+					? `No merged worktrees found (checked against ${baseBranch})`
+					: "No worktrees to clean",
+			);
 			return;
 		}
 
 		// Display candidates
+		const mergedCount = toClean.filter((c) => c.merged).length;
 		consola.log("");
-		consola.log(`  Found ${toClean.length} merged worktree${toClean.length !== 1 ? "s" : ""}:`);
+		consola.log(
+			`  Found ${toClean.length} worktree${toClean.length !== 1 ? "s" : ""} to clean${mergedCount > 0 ? ` (${mergedCount} merged)` : ""}:`,
+		);
 		consola.log("");
 		for (const c of toClean) {
 			const dirty = c.isClean ? "" : " \x1b[33m(has uncommitted changes)\x1b[0m";
-			consola.log(`    ${c.name}  ${c.wt.branch}${dirty}`);
+			const mergedTag = c.merged ? " \x1b[36m[merged]\x1b[0m" : "";
+			consola.log(`    ${c.name}  ${c.wt.branch}${mergedTag}${dirty}`);
 		}
 		consola.log("");
 

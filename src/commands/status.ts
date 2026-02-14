@@ -14,6 +14,7 @@ import {
 } from "../core/git";
 import { padEnd, relativeTime } from "../utils/format";
 import { contractHome } from "../utils/paths";
+import { isInsideWorktree } from "../utils/worktree";
 
 interface WorktreeDetail {
 	name: string;
@@ -45,7 +46,7 @@ async function gatherDetails(
 	return Promise.all(
 		worktrees.map(async (wt) => {
 			const name = path.basename(wt.path);
-			const isCurrent = cwd.startsWith(wt.path);
+			const isCurrent = isInsideWorktree(cwd, wt.path);
 
 			let status = { modified: 0, added: 0, deleted: 0, renamed: 0, total: 0, isClean: true };
 			try {
@@ -210,19 +211,21 @@ export default defineCommand({
 			const intervalSec = args.interval ? Number.parseFloat(args.interval) : 2;
 			const intervalMs = Math.max(500, intervalSec * 1000);
 
+			process.on("SIGINT", () => {
+				consola.log("");
+				process.exit(0);
+			});
+
 			// Initial render
 			await render();
+			consola.log(`  \x1b[2mRefreshing every ${intervalSec}s — press Ctrl+C to stop\x1b[0m`);
 
 			// Watch loop
-			const loop = async () => {
-				while (true) {
-					await new Promise((resolve) => setTimeout(resolve, intervalMs));
-					// Clear screen
-					process.stdout.write("\x1b[2J\x1b[H");
-					await render();
-				}
-			};
-			await loop();
+			while (true) {
+				await new Promise((resolve) => setTimeout(resolve, intervalMs));
+				process.stdout.write("\x1b[2J\x1b[H");
+				await render();
+			}
 		} else {
 			await render();
 		}

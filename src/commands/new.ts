@@ -11,7 +11,7 @@ import {
 	isGitRepo,
 	listWorktrees,
 } from "../core/git";
-import { launchTool } from "../core/launch";
+import { openToolInWorktree } from "../core/open-tool";
 import { detectInstallCommand } from "../core/pkg";
 import { runScripts, type ScriptContext } from "../core/scripts";
 import { resolveTool } from "../core/tools";
@@ -170,10 +170,6 @@ export default defineCommand({
 				branch,
 				repoName,
 			};
-			// If nodeModules strategy is "install", ensure install is in the script list
-			if (config.defaults.nodeModules === "install" && !scriptsToRun.includes("install")) {
-				scriptsToRun = ["install", ...scriptsToRun];
-			}
 			const ok = await runScripts(scriptsToRun, config, ctx);
 			if (!ok) {
 				consola.warn("Some scripts failed — worktree is still created");
@@ -198,19 +194,7 @@ export default defineCommand({
 				consola.warn(`Unknown tool "${args.open}" — skipping open`);
 				return;
 			}
-			const cmdParts = resolved.config.command.split(" ");
-			const bin = cmdParts[0];
-			const cmdArgs = resolved.config.cwdOnly
-				? cmdParts.slice(1)
-				: [...cmdParts.slice(1), worktreePath];
-			try {
-				consola.start(`Opening with ${resolved.key}...`);
-				await launchTool(bin, cmdArgs, { cwd: worktreePath });
-				consola.success(`Launched ${resolved.key}`);
-			} catch (error: unknown) {
-				const msg = error instanceof Error ? error.message : String(error);
-				consola.error(msg);
-			}
+			await openToolInWorktree(resolved.key, resolved.config, worktreePath);
 		}
 	},
 });

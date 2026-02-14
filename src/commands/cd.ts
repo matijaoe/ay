@@ -1,8 +1,6 @@
-import path from "node:path";
 import { defineCommand } from "citty";
-import { consola } from "consola";
 import { isGitRepo, listWorktrees } from "../core/git";
-import { fuzzyMatch } from "../utils/names";
+import { resolveWorktree } from "../utils/worktree";
 
 export default defineCommand({
 	meta: {
@@ -27,42 +25,10 @@ export default defineCommand({
 			process.exit(1);
 		}
 
-		if (args.name) {
-			// Fuzzy match
-			const names = worktrees.map((w) => ({ name: path.basename(w.path), wt: w }));
-			const exact = names.find((n) => n.name === args.name);
-			if (exact) {
-				console.log(exact.wt.path);
-				return;
-			}
-			const match = fuzzyMatch(
-				args.name,
-				names.map((n) => n.name),
-			);
-			if (match) {
-				const found = names.find((n) => n.name === match);
-				if (found) {
-					console.log(found.wt.path);
-					return;
-				}
-			}
-			// No match — stderr so it doesn't pollute the path output
-			consola.error(`No worktree matching "${args.name}"`);
+		const target = await resolveWorktree(worktrees, args.name);
+		if (!target) {
 			process.exit(1);
 		}
-
-		// Interactive: prompt for selection
-		const choices = worktrees.map((w) => path.basename(w.path));
-		const selected = await consola.prompt("Select worktree", {
-			type: "select",
-			options: choices,
-		});
-		if (typeof selected !== "string") {
-			process.exit(1);
-		}
-		const target = worktrees.find((w) => path.basename(w.path) === selected);
-		if (target) {
-			console.log(target.path);
-		}
+		console.log(target.path);
 	},
 });

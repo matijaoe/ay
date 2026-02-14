@@ -2,8 +2,8 @@ import path from "node:path";
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { deleteBranch, getStatus, isGitRepo, listWorktrees, removeWorktree } from "../core/git";
-import { fuzzyMatch } from "../utils/names";
 import { contractHome } from "../utils/paths";
+import { resolveWorktree } from "../utils/worktree";
 
 export default defineCommand({
 	meta: {
@@ -40,32 +40,8 @@ export default defineCommand({
 		}
 
 		// --- Resolve which worktree to delete ---
-		let target: (typeof worktrees)[number] | undefined;
-
-		if (args.name) {
-			const names = nonMain.map((w) => path.basename(w.path));
-			const matched = fuzzyMatch(args.name, names);
-			if (!matched) {
-				consola.error(`Worktree "${args.name}" not found`);
-				consola.info("Available:", names.join(", "));
-				process.exit(1);
-			}
-			if (matched !== args.name) {
-				consola.info(`Matched "${args.name}" → ${matched}`);
-			}
-			target = nonMain.find((w) => path.basename(w.path) === matched)!;
-		} else {
-			const choices = nonMain.map((w) => path.basename(w.path));
-			const selected = await consola.prompt("Select worktree to delete", {
-				type: "select",
-				options: choices,
-			});
-			if (typeof selected !== "string") {
-				consola.warn("Cancelled");
-				return;
-			}
-			target = nonMain.find((w) => path.basename(w.path) === selected)!;
-		}
+		const target = await resolveWorktree(nonMain, args.name, "Select worktree to delete");
+		if (!target) return;
 
 		const name = path.basename(target.path);
 

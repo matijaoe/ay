@@ -5,6 +5,7 @@ import { consola } from "consola";
 import { getRepoName, getStatus, isGitRepo, listWorktrees } from "../core/git";
 import { padEnd, relativeTime } from "../utils/format";
 import { contractHome } from "../utils/paths";
+import { isInsideWorktree } from "../utils/worktree";
 
 export default defineCommand({
 	meta: {
@@ -48,7 +49,7 @@ export default defineCommand({
 			Promise.all(
 				worktrees.map(async (wt) => {
 					const name = path.basename(wt.path);
-					const isCurrent = cwd.startsWith(wt.path);
+					const isCurrent = isInsideWorktree(cwd, wt.path);
 					let status = { total: 0, isClean: true };
 					try {
 						status = await getStatus(wt.path);

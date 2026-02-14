@@ -11,11 +11,12 @@ import {
 	listWorktrees,
 	removeWorktree,
 } from "../core/git";
-import { launchTool } from "../core/launch";
+import { openToolInWorktree } from "../core/open-tool";
 import { runScripts } from "../core/scripts";
 import { getAllTools } from "../core/tools";
 import { relativeTime } from "../utils/format";
 import { contractHome } from "../utils/paths";
+import { isInsideWorktree } from "../utils/worktree";
 
 export async function interactiveMode(): Promise<void> {
 	if (!(await isGitRepo())) {
@@ -37,7 +38,7 @@ export async function interactiveMode(): Promise<void> {
 	const labels = await Promise.all(
 		worktrees.map(async (wt) => {
 			const name = path.basename(wt.path);
-			const isCurrent = cwd.startsWith(wt.path);
+			const isCurrent = isInsideWorktree(cwd, wt.path);
 			let statusStr = "";
 			try {
 				const status = await getStatus(wt.path);
@@ -109,19 +110,7 @@ export async function interactiveMode(): Promise<void> {
 				toolKey = sel;
 			}
 
-			const toolConfig = allTools[toolKey];
-			const cmdParts = toolConfig.command.split(" ");
-			const launchArgs =
-				"cwdOnly" in toolConfig && toolConfig.cwdOnly
-					? cmdParts.slice(1)
-					: [...cmdParts.slice(1), choice.wt.path];
-			try {
-				await launchTool(cmdParts[0], launchArgs, { cwd: choice.wt.path });
-				consola.success(`Opened with ${toolKey}`);
-			} catch (error: unknown) {
-				const msg = error instanceof Error ? error.message : String(error);
-				consola.error(msg);
-			}
+			await openToolInWorktree(toolKey, allTools[toolKey], choice.wt.path);
 			break;
 		}
 		case "Run setup": {
