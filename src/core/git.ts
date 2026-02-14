@@ -58,13 +58,11 @@ export async function getCurrentBranch(cwd?: string): Promise<string> {
 	return branch.trim();
 }
 
-export async function listWorktrees(cwd?: string): Promise<WorktreeInfo[]> {
-	const g = git(cwd);
-	const result = await g.raw(["worktree", "list", "--porcelain"]);
+export function parseWorktreeList(raw: string): WorktreeInfo[] {
 	const worktrees: WorktreeInfo[] = [];
 	let current: Partial<WorktreeInfo> = {};
 
-	for (const line of result.split("\n")) {
+	for (const line of raw.split("\n")) {
 		if (line.startsWith("worktree ")) {
 			current.path = line.slice("worktree ".length);
 		} else if (line.startsWith("HEAD ")) {
@@ -91,6 +89,12 @@ export async function listWorktrees(cwd?: string): Promise<WorktreeInfo[]> {
 	}
 
 	return worktrees;
+}
+
+export async function listWorktrees(cwd?: string): Promise<WorktreeInfo[]> {
+	const g = git(cwd);
+	const result = await g.raw(["worktree", "list", "--porcelain"]);
+	return parseWorktreeList(result);
 }
 
 export async function createWorktree(
