@@ -135,26 +135,35 @@ async function gatherDetails(
 	);
 }
 
-function renderTable(rows: WorktreeDetail[]): void {
+function renderTableLines(rows: WorktreeDetail[]): string[] {
 	const nameW = Math.max(4, ...rows.map((r) => r.name.length)) + 2;
 	const branchW = Math.max(6, ...rows.map((r) => r.branch.length)) + 2;
 	const statusW = Math.max(6, ...rows.map((r) => r.statusPlain.length)) + 2;
 	const syncW = Math.max(4, ...rows.map((r) => r.syncPlain.length)) + 2;
 	const commitW = 12;
 
-	// Header
-	consola.log(
+	const lines: string[] = [];
+
+	lines.push(
 		`  ${padEnd("Name", nameW)}${padEnd("Branch", branchW)}${padEnd("Status", statusW)}${padEnd("Sync", syncW)}${padEnd("Last commit", commitW)}Path`,
 	);
-	consola.log(`  ${"─".repeat(nameW + branchW + statusW + syncW + commitW + 20)}`);
+	lines.push(`  ${"─".repeat(nameW + branchW + statusW + syncW + commitW + 20)}`);
 
 	for (const row of rows) {
 		const marker = row.isCurrent ? "●" : " ";
 		const mergedTag = row.merged ? " \x1b[36m[merged]\x1b[0m" : "";
 
-		consola.log(
+		lines.push(
 			`${marker} ${padEnd(row.name, nameW)}${padEnd(row.branch, branchW)}${padEndVisible(row.statusDisplay, statusW)}${padEndVisible(row.syncDisplay, syncW)}${padEnd(row.lastCommit, commitW)}${contractHome(row.path)}${mergedTag}`,
 		);
+	}
+
+	return lines;
+}
+
+function renderTable(rows: WorktreeDetail[]): void {
+	for (const line of renderTableLines(rows)) {
+		consola.log(line);
 	}
 }
 
@@ -238,22 +247,76 @@ export default defineCommand({
 			const intervalSec = args.interval ? Number.parseFloat(args.interval) : 2;
 			const intervalMs = Math.max(500, intervalSec * 1000);
 
+			// Hide cursor during watch mode
+			process.stdout.write("\x1b[?25l");
+
 			process.on("SIGINT", () => {
+				process.stdout.write("\x1b[?25h"); // restore cursor
 				consola.log("");
 				process.exit(0);
 			});
 
-			// Initial render
-			await render();
-			consola.log(
-				`  \x1b[2mRefreshing every ${intervalSec}s — press Ctrl+C to stop\x1b[0m`,
-			);
+			let prevLineCount = 0;
 
-			// Watch loop
+			const watchRender = async () => {
+				// Move cursor up to overwrite previous output
+				if (prevLineCount > 0) {
+					process.stdout.write(`\x1b[${prevLineCount}A\x1b[G`);
+				}
+
+				const worktrees = await listWorktrees();
+				const lines: string[] = [];
+
+				if (worktrees.length === 0) {
+					lines.push("  No worktrees found");
+				} else {
+					const [allRows, repoName] = await Promise.all([
+						gatherDetails(worktrees, baseBranch, remote, cwd),
+						getRepoName(),
+					]);
+
+					let rows = allRows;
+					if (args.dirty) rows = rows.filter((r) => !r.status.isClean);
+					if (args.merged) rows = rows.filter((r) => r.merged);
+
+					if (rows.length === 0) {
+						lines.push("  No worktrees match the filter");
+					} else {
+						lines.push("");
+						lines.push(
+							`  \x1b[1m${repoName}\x1b[0m \x1b[2m—\x1b[0m ${rows.length} worktree${rows.length !== 1 ? "s" : ""}`,
+						);
+						lines.push("");
+						lines.push(...renderTableLines(rows));
+						lines.push("");
+					}
+				}
+
+				const now = new Date().toLocaleTimeString();
+				lines.push(
+					`  \x1b[2mUpdated ${now} · every ${intervalSec}s · Ctrl+C to stop\x1b[0m`,
+				);
+
+				// Write lines, clearing each to end of line
+				for (const line of lines) {
+					process.stdout.write(`${line}\x1b[K\n`);
+				}
+				// Clear any leftover lines from previous render
+				if (lines.length < prevLineCount) {
+					for (let i = 0; i < prevLineCount - lines.length; i++) {
+						process.stdout.write("\x1b[K\n");
+					}
+					// Move back up past cleared lines
+					process.stdout.write(`\x1b[${prevLineCount - lines.length}A`);
+				}
+				prevLineCount = lines.length;
+			};
+
+			await watchRender();
+
 			while (true) {
 				await new Promise((resolve) => setTimeout(resolve, intervalMs));
-				process.stdout.write("\x1b[2J\x1b[H");
-				await render();
+				await watchRender();
 			}
 		} else {
 			await render();
