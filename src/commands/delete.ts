@@ -18,7 +18,7 @@ export default defineCommand({
 		},
 		force: {
 			type: "boolean",
-			description: "Skip confirmation prompt",
+			description: "Skip confirmation and force-remove even if dirty",
 		},
 		"keep-branch": {
 			type: "boolean",

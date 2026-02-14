@@ -4,6 +4,7 @@ import { defineCommand } from "citty";
 import { consola } from "consola";
 import { loadConfig } from "../config/loader";
 import {
+	type WorktreeStatus,
 	getAheadBehind,
 	getLastCommitDate,
 	getRepoName,
@@ -12,7 +13,13 @@ import {
 	isGitRepo,
 	listWorktrees,
 } from "../core/git";
-import { padEnd, relativeTime } from "../utils/format";
+import {
+	formatStatus,
+	formatStatusPlain,
+	padEnd,
+	padEndVisible,
+	relativeTime,
+} from "../utils/format";
 import { contractHome } from "../utils/paths";
 import { isInsideWorktree } from "../utils/worktree";
 
@@ -22,19 +29,33 @@ interface WorktreeDetail {
 	path: string;
 	isCurrent: boolean;
 	isMain: boolean;
-	status: {
-		modified: number;
-		added: number;
-		deleted: number;
-		renamed: number;
-		total: number;
-		isClean: boolean;
-	};
+	status: WorktreeStatus;
+	statusDisplay: string;
+	statusPlain: string;
 	merged: boolean;
 	ahead: number;
 	behind: number;
+	syncDisplay: string;
+	syncPlain: string;
 	lastCommit: string;
 	age: string;
+}
+
+function formatSync(ahead: number, behind: number): { display: string; plain: string } {
+	const reset = "\x1b[0m";
+	if (ahead > 0 && behind > 0) {
+		return {
+			display: `\x1b[33m↑${ahead} ↓${behind}${reset}`,
+			plain: `↑${ahead} ↓${behind}`,
+		};
+	}
+	if (ahead > 0) {
+		return { display: `\x1b[32m↑${ahead}${reset}`, plain: `↑${ahead}` };
+	}
+	if (behind > 0) {
+		return { display: `\x1b[31m↓${behind}${reset}`, plain: `↓${behind}` };
+	}
+	return { display: "\x1b[2m—\x1b[0m", plain: "—" };
 }
 
 async function gatherDetails(
@@ -48,7 +69,14 @@ async function gatherDetails(
 			const name = path.basename(wt.path);
 			const isCurrent = isInsideWorktree(cwd, wt.path);
 
-			let status = { modified: 0, added: 0, deleted: 0, renamed: 0, total: 0, isClean: true };
+			let status: WorktreeStatus = {
+				modified: 0,
+				added: 0,
+				deleted: 0,
+				renamed: 0,
+				total: 0,
+				isClean: true,
+			};
 			try {
 				status = await getStatus(wt.path);
 			} catch {
@@ -84,6 +112,8 @@ async function gatherDetails(
 				age = "";
 			}
 
+			const sync = formatSync(ahead, behind);
+
 			return {
 				name,
 				branch: wt.branch,
@@ -91,9 +121,13 @@ async function gatherDetails(
 				isCurrent,
 				isMain: wt.isMain,
 				status,
+				statusDisplay: formatStatus(status),
+				statusPlain: formatStatusPlain(status),
 				merged,
 				ahead,
 				behind,
+				syncDisplay: sync.display,
+				syncPlain: sync.plain,
 				lastCommit,
 				age,
 			};
@@ -102,49 +136,24 @@ async function gatherDetails(
 }
 
 function renderTable(rows: WorktreeDetail[]): void {
-	const nameW = Math.max(6, ...rows.map((r) => r.name.length)) + 2;
-	const branchW = Math.max(8, ...rows.map((r) => r.branch.length)) + 2;
+	const nameW = Math.max(4, ...rows.map((r) => r.name.length)) + 2;
+	const branchW = Math.max(6, ...rows.map((r) => r.branch.length)) + 2;
+	const statusW = Math.max(6, ...rows.map((r) => r.statusPlain.length)) + 2;
+	const syncW = Math.max(4, ...rows.map((r) => r.syncPlain.length)) + 2;
+	const commitW = 12;
 
 	// Header
 	consola.log(
-		`  ${padEnd("Name", nameW)}${padEnd("Branch", branchW)}Status       Sync        Last commit  Path`,
+		`  ${padEnd("Name", nameW)}${padEnd("Branch", branchW)}${padEnd("Status", statusW)}${padEnd("Sync", syncW)}${padEnd("Last commit", commitW)}Path`,
 	);
-	consola.log(`  ${"─".repeat(nameW + branchW + 50)}`);
+	consola.log(`  ${"─".repeat(nameW + branchW + statusW + syncW + commitW + 20)}`);
 
 	for (const row of rows) {
 		const marker = row.isCurrent ? "●" : " ";
-		const reset = "\x1b[0m";
-
-		// Status
-		let statusStr: string;
-		if (row.status.isClean) {
-			statusStr = "\x1b[32mclean\x1b[0m";
-		} else {
-			const parts: string[] = [];
-			if (row.status.modified > 0) parts.push(`~${row.status.modified}`);
-			if (row.status.added > 0) parts.push(`+${row.status.added}`);
-			if (row.status.deleted > 0) parts.push(`-${row.status.deleted}`);
-			if (row.status.renamed > 0) parts.push(`r${row.status.renamed}`);
-			statusStr = `\x1b[33m${parts.join(" ")}${reset}`;
-		}
-
-		// Sync info
-		let syncStr = "";
-		if (row.ahead > 0 && row.behind > 0) {
-			syncStr = `\x1b[33m↑${row.ahead} ↓${row.behind}${reset}`;
-		} else if (row.ahead > 0) {
-			syncStr = `\x1b[32m↑${row.ahead}${reset}`;
-		} else if (row.behind > 0) {
-			syncStr = `\x1b[31m↓${row.behind}${reset}`;
-		} else {
-			syncStr = "\x1b[2m—\x1b[0m";
-		}
-
-		// Merged indicator
 		const mergedTag = row.merged ? " \x1b[36m[merged]\x1b[0m" : "";
 
 		consola.log(
-			`${marker} ${padEnd(row.name, nameW)}${padEnd(row.branch, branchW)}${padEnd(statusStr, 22)}${padEnd(syncStr, 20)}${padEnd(row.lastCommit, 13)}${contractHome(row.path)}${mergedTag}`,
+			`${marker} ${padEnd(row.name, nameW)}${padEnd(row.branch, branchW)}${padEndVisible(row.statusDisplay, statusW)}${padEndVisible(row.syncDisplay, syncW)}${padEnd(row.lastCommit, commitW)}${contractHome(row.path)}${mergedTag}`,
 		);
 	}
 }
@@ -158,6 +167,14 @@ export default defineCommand({
 		json: {
 			type: "boolean",
 			description: "Output as JSON",
+		},
+		dirty: {
+			type: "boolean",
+			description: "Only show worktrees with uncommitted changes",
+		},
+		merged: {
+			type: "boolean",
+			description: "Only show worktrees whose branch is merged into base",
 		},
 		watch: {
 			type: "boolean",
@@ -188,10 +205,20 @@ export default defineCommand({
 				return;
 			}
 
-			const [rows, repoName] = await Promise.all([
+			const [allRows, repoName] = await Promise.all([
 				gatherDetails(worktrees, baseBranch, remote, cwd),
 				getRepoName(),
 			]);
+
+			// Apply filters
+			let rows = allRows;
+			if (args.dirty) rows = rows.filter((r) => !r.status.isClean);
+			if (args.merged) rows = rows.filter((r) => r.merged);
+
+			if (rows.length === 0) {
+				consola.info("No worktrees match the filter");
+				return;
+			}
 
 			if (args.json) {
 				console.log(JSON.stringify(rows, null, 2));
@@ -200,7 +227,7 @@ export default defineCommand({
 
 			consola.log("");
 			consola.log(
-				`  \x1b[1m${repoName}\x1b[0m — ${rows.length} worktree${rows.length !== 1 ? "s" : ""}`,
+				`  \x1b[1m${repoName}\x1b[0m \x1b[2m—\x1b[0m ${rows.length} worktree${rows.length !== 1 ? "s" : ""}`,
 			);
 			consola.log("");
 			renderTable(rows);
@@ -218,7 +245,9 @@ export default defineCommand({
 
 			// Initial render
 			await render();
-			consola.log(`  \x1b[2mRefreshing every ${intervalSec}s — press Ctrl+C to stop\x1b[0m`);
+			consola.log(
+				`  \x1b[2mRefreshing every ${intervalSec}s — press Ctrl+C to stop\x1b[0m`,
+			);
 
 			// Watch loop
 			while (true) {

@@ -14,7 +14,7 @@ import {
 import { openToolInWorktree } from "../core/open-tool";
 import { runScripts } from "../core/scripts";
 import { getAllTools } from "../core/tools";
-import { relativeTime } from "../utils/format";
+import { formatStatus, padEnd, padEndVisible, relativeTime } from "../utils/format";
 import { contractHome } from "../utils/paths";
 import { isInsideWorktree } from "../utils/worktree";
 
@@ -34,19 +34,17 @@ export async function interactiveMode(): Promise<void> {
 		return;
 	}
 
-	// Build display labels
-	const labels = await Promise.all(
+	// Build display labels with aligned columns
+	const entries = await Promise.all(
 		worktrees.map(async (wt) => {
 			const name = path.basename(wt.path);
 			const isCurrent = isInsideWorktree(cwd, wt.path);
-			let statusStr = "";
+			let statusDisplay = "\x1b[32mclean\x1b[0m";
 			try {
 				const status = await getStatus(wt.path);
-				statusStr = status.isClean
-					? "\x1b[32mclean\x1b[0m"
-					: `\x1b[33m${status.total} change${status.total !== 1 ? "s" : ""}\x1b[0m`;
+				statusDisplay = formatStatus(status);
 			} catch {
-				statusStr = "???";
+				statusDisplay = "\x1b[2m???\x1b[0m";
 			}
 
 			let age = "";
@@ -57,18 +55,26 @@ export async function interactiveMode(): Promise<void> {
 				age = "";
 			}
 
-			const marker = isCurrent ? "● " : "  ";
-			return {
-				label: `${marker}${name}  ${wt.branch}  ${statusStr}  ${age}`,
-				value: name,
-				wt,
-			};
+			return { name, branch: wt.branch, statusDisplay, age, isCurrent, wt };
 		}),
 	);
 
+	// Calculate column widths for alignment
+	const nameW = Math.max(4, ...entries.map((e) => e.name.length)) + 2;
+	const branchW = Math.max(6, ...entries.map((e) => e.branch.length)) + 2;
+
+	const labels = entries.map((e) => {
+		const marker = e.isCurrent ? "● " : "  ";
+		return {
+			label: `${marker}${padEnd(e.name, nameW)}${padEnd(e.branch, branchW)}${e.statusDisplay}  ${e.age}`,
+			value: e.name,
+			wt: e.wt,
+		};
+	});
+
 	consola.log("");
 	consola.log(
-		`  \x1b[1may — ${repoName}\x1b[0m — ${worktrees.length} worktree${worktrees.length !== 1 ? "s" : ""}`,
+		`  \x1b[1may \x1b[2m—\x1b[0m \x1b[1m${repoName}\x1b[0m \x1b[2m—\x1b[0m ${worktrees.length} worktree${worktrees.length !== 1 ? "s" : ""}`,
 	);
 	consola.log("");
 
